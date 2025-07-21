@@ -1,0 +1,4 @@
+gpiozero
+pytz
+RPi.bme280
+smbus2
