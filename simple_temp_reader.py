@@ -38,7 +38,7 @@ def main():
         sys.exit(1)
 
     finally:
-        time.sleep(1)
+        time.sleep(0.25)
         led.off()  # Ensure LED is turned off after reading
 
 
