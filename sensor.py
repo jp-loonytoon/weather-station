@@ -36,8 +36,7 @@ class Sensor:
     
     This class provides a high-level interface to the BME280 sensor, which
     measures temperature, humidity, and atmospheric pressure. The sensor
-    communicates via I2C protocol and requires proper calibration for
-    accurate readings.
+    communicates via the I2C protocol.
     
     The BME280 sensor features:
     - Temperature measurement range: -40°C to +85°C

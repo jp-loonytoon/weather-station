@@ -55,3 +55,11 @@ You should see something like this:
 ```
 
 Note the BME280 sensor address (it will either be 76 or 77).
+
+## Basic Usage
+
+You can run the data logger from the command line on the Raspberry Pi like this:
+
+```bash
+./datalogger.py
+```
