@@ -8,9 +8,11 @@ display temperature data.
 import time
 import sys
 import logging
+from logging.handlers import RotatingFileHandler
 from sensor import Sensor
 from gpiozero import LED
 
+LOGFILE_MAX_SIZE = 1 * 1024 * 1024  # 1 MB
 
 def setup_logging():
     """Set up logging configuration to write to weather.log file."""
@@ -18,7 +20,9 @@ def setup_logging():
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler('weather.log'),
+            RotatingFileHandler('weather.log',
+                                maxBytes=LOGFILE_MAX_SIZE,
+                                backupCount=5),
             logging.StreamHandler()  # Also log to console
         ]
     )
