@@ -34,6 +34,10 @@ from typing import Optional
 from sensor import Sensor
 from gpiozero import LED
 
+DATALOGGER_UUID = "609219BA-72F6-5D0D-A0F1-3FF7E603B2DC"
+GPIO_LED_PIN = 22
+DEFAULT_SAMPLE_INTERVAL = 60  # seconds
+DEFAULT_LED_DURATION = 0.15  # seconds
 
 class DataLogger:
     """
@@ -76,9 +80,9 @@ class DataLogger:
     def __init__(self,
                  sensor_address: int = 0x76,
                  sensor_bus: int = 1,
-                 led_pin: int = 22,
+                 led_pin: int = GPIO_LED_PIN,
                  log_level: str = 'INFO',
-                 led_duration: float = 0.25,
+                 led_duration: float = DEFAULT_LED_DURATION,
                  log_file: str = 'weather.log',
                  max_log_size: int = 1024 * 1024,
                  backup_count: int = 5):
@@ -126,7 +130,10 @@ class DataLogger:
                        f"Log Level: {self.log_level}, "
                        f"LED Duration: {led_duration}s")
             self.logger.info(log_msg)
-            
+
+            print(f"Sensor ID = {self.sensor.chip_id}")
+            print(f"Sensor version = {self.sensor.chip_version}")
+
         except Exception as e:
             print(f"Failed to initialize DataLogger: {e}")
             raise
@@ -261,15 +268,15 @@ class DataLogger:
         return data
     
     def start_continuous_logging(self,
-                                 interval: float = 5.0,
+                                 interval: float = DEFAULT_SAMPLE_INTERVAL,
                                  duration: Optional[float] = None) -> None:
         """
         Start continuous data logging at specified intervals.
         
         Args:
-            interval (float): Time between readings in seconds (default: 5.0)
+            interval (float): Time between readings in seconds
             duration (Optional[float]): Total duration to log in seconds. 
-                                      None for infinite logging (default: None)
+                None for infinite logging (default: None)
         """
         if interval <= 0:
             raise ValueError("Interval must be positive")
@@ -282,8 +289,9 @@ class DataLogger:
             print(f"Logging for {duration} seconds total")
         print("Press Ctrl+C to stop...\n")
         
-        self.logger.info(f"Starting continuous logging - Interval: {interval}s, "
-                        f"Duration: {duration}s" if duration else "infinite")
+        self.logger.info(f"Starting continuous logging - Interval: {interval}s")
+        if duration:
+            self.logger.info(f"Will continue logging for {duration}s")
         
         try:
             while self.is_running:
@@ -351,7 +359,7 @@ def main():
 
     try:
         # Create data logger with custom settings
-        with DataLogger(led_pin=22,
+        with DataLogger(led_pin=GPIO_LED_PIN,
                        log_level='INFO',
                        led_duration=0.5) as datalogger:
 
@@ -361,7 +369,7 @@ def main():
 
             # Start continuous logging
             print("\n--- Continuous Logging ---")
-            datalogger.start_continuous_logging(interval=5.0)
+            datalogger.start_continuous_logging(interval=DEFAULT_SAMPLE_INTERVAL)
 
     except KeyboardInterrupt:
         print("\nExiting data logger...")

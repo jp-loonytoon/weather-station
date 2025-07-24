@@ -29,6 +29,9 @@ import time
 import smbus2
 import bme280
 
+REG_ID = 0xD0
+DEFAULT_ADDRESS = 0x76
+DEFAULT_BUS = 1
 
 class Sensor:
     """
@@ -63,7 +66,7 @@ class Sensor:
         and that I2C is enabled on your system before using this class.
     """
 
-    def __init__(self, address=0x76, bus_number=1):
+    def __init__(self, address=DEFAULT_ADDRESS, bus_number=DEFAULT_BUS):
         """Initialize the BME280 sensor.
         
         Args:
@@ -74,6 +77,14 @@ class Sensor:
         self.bus = smbus2.SMBus(bus_number)
         self.calibration_params = bme280.load_calibration_params(
             self.bus, self.address)
+        self.chip_id, self.chip_version = self._readID()
+
+
+    def _readID(self):
+        (chip_id, chip_version) = self.bus.read_i2c_block_data(self.address, REG_ID, 2)
+        
+        return (chip_id, chip_version)
+
 
     def read(self):
         """Read current sensor data.
@@ -91,11 +102,11 @@ class Sensor:
             'timestamp': data.timestamp
         }
 
-    def sample(self, interval_seconds, count=1):
+    def sample(self, interval_seconds=60, count=1):
         """Sample sensor data periodically.
 
         Args:
-            interval_seconds: Time between samples in seconds
+            interval_seconds: Time between samples in seconds (default: 1 minute)
             count: Number of samples to take (default: 1, 0 for infinite)
 
         Returns:
