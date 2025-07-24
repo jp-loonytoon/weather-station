@@ -5,35 +5,40 @@ BME280 Data Logger Class
 This module provides a configurable data logger for the BME280 sensor that
 periodically samples temperature, humidity, and pressure data. The logger
 supports customizable logging levels, LED indicator duration, and sampling
-intervals.
+intervals. It is designed to run on a Raspberry Pi.`
 
 Features:
-- Configurable log levels (DEBUG, INFO, WARNING, ERROR)
+- Configurable sampling intervals with continuous logging
+- Ability to log temperature, humidity, and pressure data
 - Adjustable LED indicator duration
-- Flexible sampling intervals
-- Rotating log files to manage disk space
-- Console and file logging output
-- Graceful shutdown handling
 
 Example:
     Basic usage of the DataLogger class:
     
     >>> from datalogger import DataLogger
-    >>> logger = DataLogger(led_pin=22, log_level='INFO')
-    >>> logger.start_logging(interval=5, duration=60)
+    >>> dl = DataLogger()
+    >>> dl.start_logging()
     
-Author: Weather Station Project
+Author: james@ecreationtech.co.uk
 Date: July 2025
 """
 
 import time
+from datetime import datetime
 import sys
 import logging
 from logging.handlers import RotatingFileHandler
 from typing import Optional
-from sensor import Sensor
-from gpiozero import LED
 
+from gpiozero import LED
+from sensor import Sensor
+from data_storage import DataStorage
+
+DATALOGGER_UUID = "609219BA-72F6-5D0D-A0F1-3FF7E603B2DC"
+GPIO_LED_PIN = 22
+DEFAULT_SAMPLE_INTERVAL = 60  # seconds
+DEFAULT_LED_DURATION = 0.15  # seconds
+DATABASE_FILE = 'datalogger.db'
 
 class DataLogger:
     """
@@ -44,12 +49,9 @@ class DataLogger:
     through an LED indicator and supports various configuration options.
     
     Features:
-    - Configurable sampling intervals
+    - Configurable sampling intervals with continuous logging
+    - Ability to log temperature, humidity, and pressure data
     - Adjustable LED indicator duration
-    - Multiple log levels (DEBUG, INFO, WARNING, ERROR)
-    - Rotating log files with size limits
-    - Single reading or continuous logging modes
-    - Graceful shutdown handling
     
     Attributes:
         sensor (Sensor): BME280 sensor interface instance
@@ -69,16 +71,16 @@ class DataLogger:
         ...     led_duration=0.5,
         ...     log_file='weather.log'
         ... )
-        >>> datalogger.take_single_reading()
         >>> datalogger.start_continuous_logging(interval=10)
     """
     
     def __init__(self,
                  sensor_address: int = 0x76,
                  sensor_bus: int = 1,
-                 led_pin: int = 22,
-                 log_level: str = 'INFO',
-                 led_duration: float = 0.25,
+                 led_pin: int = GPIO_LED_PIN,
+                 backing_store: str = None,
+                 log_level: str = 'WARNING',
+                 led_duration: float = DEFAULT_LED_DURATION,
                  log_file: str = 'weather.log',
                  max_log_size: int = 1024 * 1024,
                  backup_count: int = 5):
@@ -89,6 +91,7 @@ class DataLogger:
             sensor_address (int): I2C address of BME280 sensor (default: 0x76)
             sensor_bus (int): I2C bus number (default: 1)
             led_pin (int): GPIO pin number for LED indicator (default: 22)
+            backing_store (str): Local database file for storing readings
             log_level (str): Logging level ('DEBUG', 'INFO', 'WARNING',
                            'ERROR')
             led_duration (float): Duration to keep LED on during readings
@@ -104,29 +107,24 @@ class DataLogger:
         self.led_duration = led_duration
         self.log_level = log_level.upper()
         self.is_running = False
+        self.storage = None
         
-        # Validate log level
         valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR']
         if self.log_level not in valid_levels:
             msg = f"Invalid log level. Must be one of: {valid_levels}"
             raise ValueError(msg)
-        
+               
         try:
-            # Initialize sensor
             self.sensor = Sensor(address=sensor_address, bus_number=sensor_bus)
-            
-            # Initialize LED
             self.led = LED(led_pin)
-            
-            # Setup logging
-            self.logger = self._setup_logging(log_file, max_log_size,
-                                              backup_count)
-            
-            log_msg = (f"DataLogger initialized - LED Pin: {led_pin}, "
-                       f"Log Level: {self.log_level}, "
-                       f"LED Duration: {led_duration}s")
+            self.logger = self._setup_logging(log_file, max_log_size, backup_count)
+            log_msg = (f"DataLogger initialized")
             self.logger.info(log_msg)
-            
+            if backing_store is not None:
+                self.storage = DataStorage(backing_store)
+                log_msg += (f"Using backing store: {backing_store}")
+
+            self.logger.info(log_msg)
         except Exception as e:
             print(f"Failed to initialize DataLogger: {e}")
             raise
@@ -144,11 +142,8 @@ class DataLogger:
         Returns:
             logging.Logger: Configured logger instance
         """
-        # Create logger
         logger = logging.getLogger(__name__)
         logger.setLevel(getattr(logging, self.log_level))
-        
-        # Clear any existing handlers
         logger.handlers.clear()
         
         # Create formatter
@@ -157,8 +152,7 @@ class DataLogger:
         
         # Create rotating file handler
         file_handler = RotatingFileHandler(
-            log_file,
-            maxBytes=max_size,
+            log_file, maxBytes=max_size,
             backupCount=backup_count
         )
         file_handler.setFormatter(formatter)
@@ -169,7 +163,6 @@ class DataLogger:
         console_handler.setFormatter(formatter)
         console_handler.setLevel(getattr(logging, self.log_level))
         
-        # Add handlers to logger
         logger.addHandler(file_handler)
         logger.addHandler(console_handler)
         
@@ -195,8 +188,6 @@ class DataLogger:
         
         self.log_level = level
         log_level_obj = getattr(logging, level)
-        
-        # Update logger and all handlers
         self.logger.setLevel(log_level_obj)
         for handler in self.logger.handlers:
             handler.setLevel(log_level_obj)
@@ -215,10 +206,11 @@ class DataLogger:
         
         self.led_duration = duration
         self.logger.info(f"LED duration set to: {duration}s")
-    
-    def _read_and_display_data(self) -> dict:
+  
+
+    def _read_data(self) -> dict:
         """
-        Read sensor data, control LED, and log the results.
+        Read sensor data and return the results.
         
         Returns:
             dict: Sensor reading data
@@ -227,17 +219,7 @@ class DataLogger:
         try:
             self.led.on()
             data = self.sensor.read()
-            
-            temp_str = f"Temperature: {data['temperature']:.2f}°C"
-            humidity_str = f"Humidity: {data['humidity']:.2f}%"
-            pressure_str = f"Pressure: {data['pressure']:.2f} hPa"
-            timestamp_str = f"Timestamp: {data['timestamp']}"
-            
-            # Log the reading
-            log_msg = (f"Sensor Reading - {temp_str}, {humidity_str}, "
-                       f"{pressure_str}")
-            self.logger.info(log_msg)
-            
+           
             # Keep LED on for specified duration
             if self.led_duration > 0:
                 time.sleep(self.led_duration)
@@ -248,29 +230,22 @@ class DataLogger:
             # Always turn off LED
             self.led.off()
     
-    def take_single_reading(self) -> dict:
-        """
-        Take a single sensor reading and display/log the results.
-        
-        Returns:
-            dict: Sensor reading data
-        """
-        self.logger.info("Taking single sensor reading")
-        data = self._read_and_display_data()
-        self.logger.info("Single reading completed")
-        return data
-    
     def start_continuous_logging(self,
-                                 interval: float = 5.0,
+                                 interval: float = DEFAULT_SAMPLE_INTERVAL,
                                  duration: Optional[float] = None) -> None:
         """
         Start continuous data logging at specified intervals.
         
         Args:
-            interval (float): Time between readings in seconds (default: 5.0)
+            interval (float): Time between readings in seconds
             duration (Optional[float]): Total duration to log in seconds. 
-                                      None for infinite logging (default: None)
+                None for infinite logging (default: None)
         """
+
+        def convert_datestring_to_timestamp(date_input: datetime) -> int:
+            unix_timestamp = int(date_input.timestamp())
+            return unix_timestamp
+
         if interval <= 0:
             raise ValueError("Interval must be positive")
         
@@ -282,13 +257,37 @@ class DataLogger:
             print(f"Logging for {duration} seconds total")
         print("Press Ctrl+C to stop...\n")
         
-        self.logger.info(f"Starting continuous logging - Interval: {interval}s, "
-                        f"Duration: {duration}s" if duration else "infinite")
+        self.logger.info(f"Starting continuous logging - Interval: {interval}s")
+        if duration:
+            self.logger.info(f"Will continue logging for {duration}s")
         
         try:
+
             while self.is_running:
-                # Take reading
-                self._read_and_display_data()
+                data = self._read_data()    # take the sensor reading
+
+                temp_str = f"{data['temperature']:.3f}°C"
+                humidity_str = f"{data['humidity']:.3f}%"
+                pressure_str = f"{data['pressure']:.3f} hPa"
+                timestamp_str = {data['timestamp']}
+                unix_timestamp = convert_datestring_to_timestamp(data['timestamp'])
+
+                print("==========================")
+                print(f"Timestamp: {timestamp_str}")
+                print(f"Unix Timestamp: {unix_timestamp}")
+                print(f"Temperature: {temp_str}")
+                print(f"Humidity: {humidity_str}")
+                print(f"Pressure: {pressure_str}")
+
+                if self.storage is not None:
+                    self.storage.store_reading(
+                        channel_id=self.sensor.chip_id,
+                        temperature=data['temperature'],
+                        humidity=data['humidity'],
+                        pressure=data['pressure'],
+                        timestamp=unix_timestamp
+                    )
+
                 
                 # Check if duration limit reached
                 if duration and (time.time() - start_time) >= duration:
@@ -350,19 +349,8 @@ def main():
     print("==================")
 
     try:
-        # Create data logger with custom settings
-        with DataLogger(led_pin=22,
-                       log_level='INFO',
-                       led_duration=0.5) as datalogger:
-
-            # Take a single reading first
-            print("\n--- Single Reading ---")
-            datalogger.take_single_reading()
-
-            # Start continuous logging
-            print("\n--- Continuous Logging ---")
-            datalogger.start_continuous_logging(interval=5.0)
-
+        dl = DataLogger(backing_store=DATABASE_FILE, log_level='INFO')
+        dl.start_continuous_logging(interval=DEFAULT_SAMPLE_INTERVAL)
     except KeyboardInterrupt:
         print("\nExiting data logger...")
         sys.exit(0)

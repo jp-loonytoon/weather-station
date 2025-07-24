@@ -5,11 +5,22 @@ Reads temperature data and displays it to the command line.
 """
 
 import time
+from datetime import datetime
 import sys
 from gpiozero import LED
 
 from sensor import Sensor
 
+
+def convert_datestring_to_timestamp(date_input):
+    # Check if input is already a datetime object
+    if isinstance(date_input, datetime):
+        unix_timestamp = int(date_input.timestamp())
+    else:
+        # If it's a string, parse it
+        dt = datetime.strptime(date_input, '%Y-%m-%d %H:%M:%S.%f%z')
+        unix_timestamp = int(dt.timestamp())
+    return unix_timestamp
 
 
 def main():
@@ -34,6 +45,9 @@ def main():
         print(f"Humidity: {data['humidity']:.2f}%")
         print(f"Pressure: {data['pressure']:.2f} hPa")
         print(f"Reading taken at: {data['timestamp']}")
+
+        timestamp = convert_datestring_to_timestamp(data['timestamp'])
+        print(f"Timestamp (UNIX): {timestamp}")
 
     except Exception as e:
         print(f"Error reading sensor: {e}")

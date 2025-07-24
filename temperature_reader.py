@@ -13,6 +13,10 @@ from sensor import Sensor
 from gpiozero import LED
 
 LOGFILE_MAX_SIZE = 1 * 1024 * 1024  # 1 MB
+SAMPLE_INTERVAL = 60        # how many seconds between samples
+LED_PIN = 22                # GPIO pin for the indicator LED
+LED_DURATION = 0.15         # how long the indicator LED flashes for
+
 
 def setup_logging():
     """Set up logging configuration to write to weather.log file."""
@@ -31,7 +35,7 @@ def setup_logging():
 
 def display_temperature_data(sensor_data, logger=None):
     """Display temperature data in a formatted way.
-    
+
     Args:
         sensor_data (dict): Dictionary containing sensor readings
         logger: Logger instance for writing to log file
@@ -40,14 +44,14 @@ def display_temperature_data(sensor_data, logger=None):
     humidity_str = f"Humidity: {sensor_data['humidity']:.2f}%"
     pressure_str = f"Pressure: {sensor_data['pressure']:.2f} hPa"
     timestamp_str = f"Timestamp: {sensor_data['timestamp']}"
-    
+
     # Display to console
     print(temp_str)
     print(humidity_str)
     print(pressure_str)
     print(timestamp_str)
     print("-" * 40)
-    
+
     # Log to file if logger is provided
     if logger:
         log_msg = (f"Sensor Reading - {temp_str}, {humidity_str}, "
@@ -60,38 +64,32 @@ def main():
     print("BME280 Temperature Reader")
     print("========================")
     print("Press Ctrl+C to exit\n")
-    
+
     # Set up logging
     logger = setup_logging()
     logger.info("Starting BME280 Temperature Reader")
-    
+
     try:
         # Initialize the sensor
         sensor = Sensor()
-        led = LED(22)
-        print("Sensor initialized successfully!")
+        led = LED(LED_PIN)
+        print("Sensor initialized successfully")
         logger.info("Sensor and LED initialized successfully")
-        
-        # Option 1: Single reading
-        print("\n--- Single Reading ---")
-        led.on()
-        data = sensor.read()
-        display_temperature_data(data, logger)
-        led.off()
-        logger.info("Single reading completed")
-        
-        # Option 2: Continuous readings every 5 seconds
-        print("--- Continuous Readings (every 5 seconds) ---")
+
+        # Continuous readings every SAMPLE_INTERVAL seconds
+        print("--- Continuous Readings ---")
         print("Press Ctrl+C to stop...\n")
-        logger.info("Starting continuous readings")
-        
+        logger.info("Starting continuous readings every %d seconds",
+                    SAMPLE_INTERVAL)
+
         while True:
             led.on()
             data = sensor.read()
             display_temperature_data(data, logger)
-            time.sleep(0.25)
+            time.sleep(LED_DURATION)
+            
             led.off()
-            time.sleep(4.75)
+            time.sleep(SAMPLE_INTERVAL - LED_DURATION)
             
     except KeyboardInterrupt:
         print("\nExiting temperature reader...")
