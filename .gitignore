@@ -177,3 +177,7 @@ pyrightconfig.json
 
 # Local SQLite database file
 datalogger.db
+
+# log locations
+logs/
+

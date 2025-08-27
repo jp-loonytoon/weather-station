@@ -82,7 +82,7 @@ class DataLogger:
                  backing_store: str = None,
                  log_level: str = 'WARNING',
                  led_duration: float = DEFAULT_LED_DURATION,
-                 log_file: str = 'weather.log',
+                 log_file: str = 'logs/weather.log',
                  max_log_size: int = 1024 * 1024,
                  backup_count: int = 5):
         """
@@ -352,7 +352,7 @@ def main():
 
     try:
         with DataLogger(backing_store=DATABASE_FILE, log_level='INFO') as dl:
-            dl.start_continuous_logging(interval=DEFAULT_SAMPLE_INTERVAL)
+            dl.start_continuous_logging(interval=60)
 
     except KeyboardInterrupt:
         print("\nExiting data logger...")
