@@ -29,6 +29,9 @@ import time
 import smbus2
 import bme280
 
+from posthog_client import posthog_client
+from posthog_logs import log_sensor_reading_completed
+
 
 class Sensor:
     """
@@ -85,12 +88,29 @@ class Sensor:
         """
         data = bme280.sample(self.bus, self.address, self.calibration_params)
 
-        return {
+        reading = {
             'temperature': data.temperature,
             'humidity': data.humidity,
             'pressure': data.pressure,
             'timestamp': data.timestamp
         }
+
+        if posthog_client:
+            try:
+                posthog_client.capture(
+                    event="sensor_reading_completed",
+                    properties={
+                        "sensor_model": "bme280",
+                        "i2c_address": self.address,
+                        "interface": "sensor_class",
+                    },
+                )
+            except Exception:
+                pass
+
+        log_sensor_reading_completed("sensor_class", self.address)
+
+        return reading
 
     def sample(self, interval_seconds, count=1):
         """Sample sensor data periodically.

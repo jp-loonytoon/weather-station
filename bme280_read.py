@@ -8,6 +8,9 @@ import pytz
 from gpiozero import LED
 import datetime
 
+from posthog_client import posthog_client
+from posthog_logs import log_sensor_reading_completed
+
 
 
 
@@ -34,6 +37,21 @@ def main():
     led.on()
 
     data = read_sensor_data(bus, address, calibration_params)
+
+    if posthog_client:
+        try:
+            posthog_client.capture(
+                event="sensor_reading_completed",
+                properties={
+                    "sensor_model": "bme280",
+                    "i2c_address": address,
+                    "interface": "direct_i2c",
+                },
+            )
+        except Exception:
+            pass
+
+    log_sensor_reading_completed("direct_i2c", address)
 
     # Extract data
     temperature = data.temperature

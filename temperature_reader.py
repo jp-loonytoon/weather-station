@@ -8,8 +8,10 @@ display temperature data.
 import time
 import sys
 import logging
-from sensor import Sensor
 from gpiozero import LED
+
+from posthog_client import posthog_client
+from sensor import Sensor
 
 
 def setup_logging():
@@ -96,6 +98,11 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
         logger.error(f"Error occurred: {e}")
+        if posthog_client:
+            try:
+                posthog_client.capture_exception(e)
+            except Exception:
+                pass
         sys.exit(1)
 
 
