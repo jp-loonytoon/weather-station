@@ -15,12 +15,12 @@ Compatible with Raspberry Pi and other single-board computers with I2C support.
 
 Example:
     Basic usage of the Sensor class:
-    
+
     >>> from sensor import Sensor
     >>> sensor = Sensor()
     >>> data = sensor.read()
     >>> print(f"Temperature: {data['temperature']:.2f}°C")
-    
+
 Author: Weather Station Project
 Date: July 2025
 """
@@ -29,44 +29,47 @@ import time
 import smbus2
 import bme280
 
+REG_ID = 0xD0
+DEFAULT_ADDRESS = 0x76
+DEFAULT_BUS = 1
+
 
 class Sensor:
     """
     BME280 Environmental Sensor Interface Class
-    
+
     This class provides a high-level interface to the BME280 sensor, which
     measures temperature, humidity, and atmospheric pressure. The sensor
-    communicates via I2C protocol and requires proper calibration for
-    accurate readings.
-    
+    communicates via the I2C protocol.
+
     The BME280 sensor features:
     - Temperature measurement range: -40°C to +85°C
     - Humidity measurement range: 0% to 100% RH
     - Pressure measurement range: 300 to 1100 hPa
     - High accuracy and low power consumption
-    
+
     Attributes:
         address (int): I2C address of the BME280 sensor
         bus (smbus2.SMBus): I2C bus interface object
         calibration_params: Sensor-specific calibration parameters
-    
+
     Example:
         Initialize sensor and take a reading:
-        
+
         >>> sensor = Sensor(address=0x76, bus_number=1)
         >>> reading = sensor.read()
         >>> print(f"Temp: {reading['temperature']:.1f}°C")
         >>> print(f"Humidity: {reading['humidity']:.1f}%")
         >>> print(f"Pressure: {reading['pressure']:.1f} hPa")
-        
+
     Note:
         Ensure the BME280 sensor is properly connected to the I2C bus
         and that I2C is enabled on your system before using this class.
     """
 
-    def __init__(self, address=0x76, bus_number=1):
+    def __init__(self, address=DEFAULT_ADDRESS, bus_number=DEFAULT_BUS):
         """Initialize the BME280 sensor.
-        
+
         Args:
             address: The I2C address of the sensor (default: 0x76)
             bus_number: The I2C bus number (default: 1)
@@ -75,10 +78,17 @@ class Sensor:
         self.bus = smbus2.SMBus(bus_number)
         self.calibration_params = bme280.load_calibration_params(
             self.bus, self.address)
+        self.chip_id, self.chip_version = self._read_id()
+
+    def _read_id(self):
+        (chip_id, chip_version) = self.bus.read_i2c_block_data(
+            self.address, REG_ID, 2)
+
+        return (chip_id, chip_version)
 
     def read(self):
         """Read current sensor data.
-        
+
         Returns:
             dict: Dictionary containing temperature, humidity, pressure
                   and timestamp
